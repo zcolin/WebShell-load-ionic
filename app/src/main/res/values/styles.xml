@@ -1,0 +1,26 @@
+<resources>
+    <!-- 进度条风格 -->
+    <style name="style_progressbar">
+        <!--<item name="android:indeterminateDrawable">@drawable/loading</item>
+           <item name="android:indeterminateBehavior">repeat</item>
+           <item name="android:indeterminateDuration">3500</item>
+           <item name="android:minWidth">36dp</item>
+           <item name="android:maxWidth">36dp</item>
+           <item name="android:minHeight">36dp</item>
+           <item name="android:maxHeight">36dp</item>-->
+    </style>
+
+    <!-- 弹出框风格 -->
+    <style name="style_dialog" parent="AppTheme">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <!-- activity不变暗 -->
+    </style>
+
+    <!-- 通用的EditText风格，其他不一样的再已功能名命名 -->
+    <style name="style_edittext_common" mce_bogus="1" parent="@android:style/Widget.EditText">
+        <item name="android:textAppearance">@style/TextStyle_BlackLight_Normal</item>
+        <item name="android:textColorHint">@color/gray_mid</item>
+    </style>
+</resources>

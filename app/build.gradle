@@ -1,0 +1,182 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.greenrobot.greendao'
+
+android {
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+
+    greendao {
+        schemaVersion rootProject.ext.greendaocSchemaVersion
+        //daoPackage 'com.greendao.gen'  //dao包名
+        //targetGenDir 'src/main/java'  //生成目录
+    }
+
+    //lint配置
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    defaultConfig {
+        applicationId rootProject.ext.applicationId
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode getGitVersion()
+        versionName rootProject.ext.rootVersionName + '.' + versionCode
+
+        //multiDexEnabled true
+
+        //ndk {
+        //  abiFilters "armeabi-v7a"  // 指定要ndk需要兼容的架构(这样其他依赖包里mips,x86,armeabi,arm-v8之类的so会被过滤掉)
+        //}
+    }
+
+    signingConfigs {
+        def pFile = file(rootProject.ext.key_path)
+        def Properties p = new Properties()
+        p.load(new FileInputStream(pFile))
+
+        debug {
+            storeFile file(p['RELEASE_STORE_FILE'])
+            storePassword p['RELEASE_STORE_PASSWORD']
+            keyAlias p['RELEASE_KEY_ALIAS']
+            keyPassword p['RELEASE_KEY_PASSWORD']
+        }
+
+        release {
+            storeFile file(p['RELEASE_STORE_FILE'])
+            storePassword p['RELEASE_STORE_PASSWORD']
+            keyAlias p['RELEASE_KEY_ALIAS']
+            keyPassword p['RELEASE_KEY_PASSWORD']
+        }
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField "boolean", "IS_RELEASE_URL", "false"
+
+            minifyEnabled false
+            zipAlignEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.debug
+        }
+
+        release {
+            minifyEnabled true
+            shrinkResources true //移除无用的resource文件（如果使用getIdentifier函数的需要关闭）
+            zipAlignEnabled true  //Zipalign优化
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    //多渠道
+    flavorDimensions "default"
+    productFlavors {
+        _test {
+            dimension "default"
+            buildConfigField "boolean", "IS_RELEASE_URL", "false"
+            applicationId "com.app.initial.debug"
+        }
+
+        _release {
+            dimension "default"
+            buildConfigField "boolean", "IS_RELEASE_URL", "true"
+            applicationId "com.app.initial"
+        }
+    }
+
+    //多渠道文件占位符替换
+    productFlavors.all {
+        //flavor -> flavor.manifestPlaceholders = [UMENG_CHANNEL_VALUE: name, UMENG_CHANNEL2_VALUE: name]//menifest中使用${UMENG_CHANNEL_VALUE}
+    }
+
+    //修改输出文件的文件名
+    def fileMap = [:]
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def outputFile = output.outputFile
+            def apkName = getApkName("${defaultConfig.versionCode}")
+            if (outputFile != null && variant.buildType.name == "release") {
+                variant.productFlavors.each { flavor ->  //多渠道包名前缀
+                    def fileName = flavor.name + "_" + rootProject.ext.apkName + "_" + apkName + ".apk"
+                    outputFileName = fileName
+                    //往数组添加输出的文件路径
+                    fileMap.put(new File(outputFile.parentFile.absolutePath, fileName), flavor.name)
+                }
+            }
+        }
+    }
+
+    tasks.whenTaskAdded { task ->
+        productFlavors.find { flavor ->
+            if (task.name.equals('assemble' + flavor.name) || task.name.equals('assembleRelease')) {
+                task.doLast {
+                    //遍历文件数组并进行操作
+                    forEachFile(fileMap)
+                }
+                return true
+            }
+        }
+    }
+
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+//遍历打包文件
+def forEachFile(fileMap) {
+    fileMap.each { file, flavor ->
+        //遍历进行文件操作
+        moveout_apk(file, flavor)
+    }
+}
+
+//copy安装包到目标文件夹
+def moveout_apk(orignalFile, flavor) {
+    def intoFile = getRootDir().absolutePath + rootProject.ext.release_path + File.separator + flavor
+    copy {
+        from orignalFile.absolutePath
+        into intoFile
+    }
+}
+
+//获取Git版本号
+def getApkName(versionCode) {
+    return rootProject.ext.rootVersionName + "_build_" + versionCode;
+}
+
+//获取Git版本号
+def getGitVersion() {
+    def cmd = 'git rev-list HEAD --count'
+    def gitVersion = cmd.execute().text.trim().toInteger()
+    return gitVersion;
+}
+
+dependencies {
+    compile fileTree(include: ['*.jar'], dir: 'libs')
+    compile "com.android.support:recyclerview-v7:$supprotVersion"
+    compile "com.android.support:cardview-v7:$supprotVersion"
+    compile "com.android.support:design:$supprotVersion"
+
+
+    compile "com.github.zcolin:ZFrame:1.5.0"//程序框架 
+    compile "com.github.zcolin:ZRecyclerView:latest.release"//下拉刷新
+    compile "com.github.zcolin:ZUILib:latest.release"//UI库
+
+    compile "com.umeng.analytics:analytics:latest.integration"
+
+    //facebook调试工具 使用chrome查看，可以进行数据库和http报文查看
+    //    compile "com.facebook.stetho:stetho:1.4.2"
+    //    compile "com.facebook.stetho:stetho-okhttp3:1.4.2"
+
+    //leakcanary
+    //    debugCompile "com.squareup.leakcanary:leakcanary-android:1.5"
+    //    releaseCompile "com.squareup.leakcanary:leakcanary-android-no-op:1.5"
+    //    testCompile "com.squareup.leakcanary:leakcanary-android-no-op:1.5"
+}
+
+

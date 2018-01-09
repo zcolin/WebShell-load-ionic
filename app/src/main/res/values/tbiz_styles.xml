@@ -1,0 +1,8 @@
+<resources>
+    <!--业务相关的Style，如某个模块的业务 -->
+
+    <!--防止短暂白屏 -->
+    <style name="ActyInitTheme" parent="AppTheme">
+        <!--<item name="android:windowBackground">@drawable/initpage</item>-->
+    </style>
+</resources>
