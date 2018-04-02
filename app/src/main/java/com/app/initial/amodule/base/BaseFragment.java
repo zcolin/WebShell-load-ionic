@@ -66,8 +66,8 @@ public abstract class BaseFragment extends BaseFrameFrag {
             if (fragmentParam[INDEX_ISSHOWTOOLBAR]) {
                 containView = initToolBar(rootView);
                 if (fragmentParam[INDEX_ISSHOWRETURN]) {
-                    setToolbarLeftBtnText(" ");
-                    setToolbarLeftBtnCompoundDrawableLeft(R.drawable.gui_icon_arrow_back);
+                    setToolbarLeftBtnText("返回");
+//                    setToolbarLeftBtnCompoundDrawableLeft(R.drawable.gui_icon_arrow_back);
                 }
             } else {
                 containView = rootView;

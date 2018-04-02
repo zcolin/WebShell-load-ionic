@@ -6,16 +6,16 @@
 
     <TextView
         android:id="@+id/toolbar_btn_left"
-        style="@style/Gui_TextStyle_White_Normal"
+        style="@style/TextStyle_White_Normal"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerVertical="true"
-        android:drawablePadding="@dimen/gui_dimens_mid"
+        android:drawablePadding="@dimen/dimens_mid"
         android:gravity="center"/>
 
     <TextView
         android:id="@+id/toolbar_title"
-        style="@style/Gui_TextStyle_White_Large"
+        style="@style/TextStyle_White_Large"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
@@ -23,12 +23,12 @@
 
     <TextView
         android:id="@+id/toolbar_btn_right"
-        style="@style/Gui_TextStyle_White_Normal"
+        style="@style/TextStyle_White_Normal"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentRight="true"
         android:layout_centerVertical="true"
-        android:layout_margin="@dimen/gui_dimens_mid"
+        android:layout_margin="@dimen/dimens_mid"
         android:gravity="center"
         />
 

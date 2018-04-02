@@ -17,7 +17,7 @@ allprojects {
     repositories {
         jcenter()
         maven { url "https://jitpack.io" }
-        google()
+        google() 
     }
 }
 
@@ -30,7 +30,7 @@ ext {
     compileSdkVersion = 26
     buildToolsVersion = "26.0.2"
     supprotVersion = "26.0.2"
-    minSdkVersion = 15
+    minSdkVersion = 19
     targetSdkVersion = 24
 
     rootVersionName = "1.0"

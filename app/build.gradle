@@ -157,18 +157,10 @@ def getGitVersion() {
 }
 
 dependencies {
-    compile fileTree(include: ['*.jar'], dir: 'libs')
-    compile "com.android.support:recyclerview-v7:$supprotVersion"
-    compile "com.android.support:cardview-v7:$supprotVersion"
-    compile "com.android.support:design:$supprotVersion"
-
-
-    compile "com.github.zcolin:ZFrame:1.5.0"//程序框架 
-    compile "com.github.zcolin:ZRecyclerView:latest.release"//下拉刷新
-    compile "com.github.zcolin:ZUILib:latest.release"//UI库
-
-    compile "com.umeng.analytics:analytics:latest.integration"
-
+    compile fileTree(include: ['*.jar','*.aar'], dir: 'libs')
+    compile "com.github.zcolin:ZFrame:1.5.0"//程序框架  
+    compile "com.github.zcolin:ZX5WebView:1.0.1"//UI库
+    compile "com.github.zcolin:ZWebView:1.4.0"//UI库
     //facebook调试工具 使用chrome查看，可以进行数据库和http报文查看
     //    compile "com.facebook.stetho:stetho:1.4.2"
     //    compile "com.facebook.stetho:stetho-okhttp3:1.4.2"

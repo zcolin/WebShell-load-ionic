@@ -10,113 +10,99 @@
 package com.app.initial.amodule.main.activity;
 
 import android.os.Bundle;
-import android.support.v4.view.ViewPager;
-import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
 
 import com.app.initial.R;
 import com.app.initial.amodule.base.ActivityParam;
 import com.app.initial.amodule.base.BaseActivity;
-import com.app.initial.amodule.main.adapter.MainPagerAdapter;
-import com.app.initial.amodule.main.fragment.MainFragment;
-import com.zcolin.frame.app.BaseFrameFrag;
-import com.zcolin.frame.util.DisplayUtil;
-import com.zcolin.gui.ZTabView;
-import com.zcolin.gui.ZViewPager;
+import com.zcolin.frame.util.ActivityUtil;
+
+import java.util.ArrayList;
 
 /**
  * 程序主页面
  */
 @ActivityParam(isShowToolBar = false)
-public class MainActivity extends BaseActivity {
-    public static final int TAB_SIZE = 4;
+public class MainActivity extends BaseActivity implements View.OnClickListener {
+    private LinearLayout llContent;
+    private ArrayList<Button> listButton = new ArrayList<>();
 
-    private BaseFrameFrag[] arrTabFrag = new BaseFrameFrag[TAB_SIZE];
-    private ZViewPager mViewPager;
-    private ZTabView   tabView;
+
+    private LinearLayout llContentBottom;
+    private ArrayList<Button> listButtonBottom = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        initRes();
-        initData();
+        init();
+    }
+
+    private void init() {
+        llContent = findViewById(R.id.ll_content);
+        llContentBottom = findViewById(R.id.ll_content_bottom);
+        listButton.add(addButton("Home", llContent));
+        listButton.add(addButton("Contact", llContent));
+        listButton.add(addButton("JSBridge", llContent));
+        listButton.add(addButton("ECharts", llContent));
+        listButton.add(addButton("Arcgis", llContent));
+
+        listButtonBottom.add(addButton("X5-Home", llContentBottom));
+        listButtonBottom.add(addButton("X5-Contact", llContentBottom));
+        listButtonBottom.add(addButton("X5-About", llContentBottom));
+        listButtonBottom.add(addButton("X5-ECharts", llContentBottom));
+        listButtonBottom.add(addButton("X5-Arcgis", llContentBottom));
+
+        for (Button btn : listButton) {
+            btn.setOnClickListener(this);
+        }
+
+        for (Button btn : listButtonBottom) {
+            btn.setOnClickListener(this);
+        }
+    }
+
+    private Button addButton(String text, LinearLayout llContent) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        Button button = new Button(mActivity);
+        button.setText(text);
+        button.setGravity(Gravity.CENTER);
+        button.setAllCaps(false);
+        llContent.addView(button, params);
+        return button;
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-    }
-
-    private void initRes() {
-        mViewPager = findViewById(R.id.view_pager);
-        tabView = findViewById(R.id.view_tabview);
-    }
-
-    private void initData() {
-        MainPagerAdapter mainPagerAdapter = new MainPagerAdapter(getSupportFragmentManager(), this);
-        mViewPager.setAdapter(mainPagerAdapter);
-        setUpTab();
-    }
-
-    public void setUpTab() {
-        tabView.initAsTabIcon(mViewPager);
-        tabView.setOnPageChangeListener(new MainPagerListener());
-
-        tabView.addZTab(getNewTab("主页"));
-        tabView.addZTab(getNewTab("频道"));
-        tabView.addZTab(getNewTab("发现"));
-        tabView.addZTab(getNewTab("我"));
-    }
-
-    /*
-     * 创建ZTab
-     */
-    private ZTabView.ZTab getNewTab(String str) {
-        float textSize = getResources().getDimension(R.dimen.textsize_small);
-        ZTabView.ZTab tab = tabView.getNewIconTab(R.drawable.ic_launcher, R.drawable.ic_launcher, str);
-        tab.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize);
-        tab.setTextColor(getResources().getColorStateList(R.color.main_tab_textcolor_selector));
-        int padding = DisplayUtil.dip2px(this, 10);
-        tab.setPadding(padding, padding, padding, padding);
-        return tab;
-    }
-
-    public BaseFrameFrag getFragByPosition(int pos) {
-        if (arrTabFrag[pos] == null) {
-            if (pos == 0) {
-                arrTabFrag[pos] = MainFragment.newInstance("主页");
-            } else if (pos == 1) {
-                arrTabFrag[pos] = MainFragment.newInstance("频道");
-            } else if (pos == 2) {
-                arrTabFrag[pos] = MainFragment.newInstance("发现");
-            } else if (pos == 3) {
-                arrTabFrag[pos] = MainFragment.newInstance("我");
-            }
-        }
-        return arrTabFrag[pos];
-    }
-
-    /*
-    * ViewPager监听类 
-    */
-    private class MainPagerListener implements ViewPager.OnPageChangeListener {
-
-        @Override
-        public void onPageScrollStateChanged(int arg0) {
+    public void onClick(View v) {
+        if (v == listButton.get(0)) {
+            ActivityUtil.startActivity(mActivity, WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=home");
+        } else if (v == listButton.get(1)) {
+            ActivityUtil.startActivity(mActivity, WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=contact");
+        } else if (v == listButton.get(2)) {
+            ActivityUtil.startActivity(mActivity, WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=jsbridge");
+        } else if (v == listButton.get(3)) {
+            ActivityUtil.startActivity(mActivity, WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=echarts");
+        } else if (v == listButton.get(4)) {
+            ActivityUtil.startActivity(mActivity, WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=arcgis");
         }
 
-        @Override
-        public void onPageScrolled(int arg0, float arg1, int arg2) {
-        }
 
-        @Override
-        public void onPageSelected(int arg0) {
-            if (arg0 == 0) {
-
-            } else {
-
-            }
+       
+        else if (v == listButtonBottom.get(0)) {
+            ActivityUtil.startActivity(mActivity, X5WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=home");
+        } else if (v == listButtonBottom.get(1)) {
+            ActivityUtil.startActivity(mActivity, X5WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=contact");
+        } else if (v == listButtonBottom.get(2)) {
+            ActivityUtil.startActivity(mActivity, X5WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=jsbridge");
+        } else if (v == listButtonBottom.get(3)) {
+            ActivityUtil.startActivity(mActivity, X5WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=echarts");
+        } else if (v == listButtonBottom.get(4)) {
+            ActivityUtil.startActivity(mActivity, X5WebViewActivity.class, "url", "file:///android_asset/www/index.html?type=arcgis");
         }
     }
 }

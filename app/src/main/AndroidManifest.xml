@@ -55,6 +55,8 @@
             android:name=".amodule.main.activity.MainActivity"
             android:launchMode="singleTask"
             android:screenOrientation="portrait"/>
+        <activity android:name=".amodule.main.activity.WebViewActivity"/>
+        <activity android:name=".amodule.main.activity.X5WebViewActivity"/>
     </application>
 
 </manifest>

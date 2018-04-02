@@ -129,8 +129,8 @@ public abstract class BaseActivity extends BaseFrameActivity {
             setSupportActionBar(toolbar);
 
             if (activityParam[INDEX_ISSHOWRETURN]) {
-                setToolbarLeftBtnText(" ");
-                setToolbarLeftBtnCompoundDrawableLeft(R.drawable.gui_icon_arrow_back);
+                setToolbarLeftBtnText("返回");
+                //                setToolbarLeftBtnCompoundDrawableLeft(R.drawable.icon_arrow_back);
             }
         } else {
             super.setContentView(layoutResID);
@@ -151,8 +151,8 @@ public abstract class BaseActivity extends BaseFrameActivity {
             setSupportActionBar(toolbar);
 
             if (activityParam[INDEX_ISSHOWRETURN]) {
-                setToolbarLeftBtnText(" ");
-                setToolbarLeftBtnCompoundDrawableLeft(R.drawable.gui_icon_arrow_back);
+                setToolbarLeftBtnText("返回");
+                //                setToolbarLeftBtnCompoundDrawableLeft(R.drawable.icon_arrow_back);
             }
         } else {
             super.setContentView(view);
