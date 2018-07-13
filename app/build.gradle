@@ -73,16 +73,9 @@ android {
     //多渠道
     flavorDimensions "default"
     productFlavors {
-        _test {
-            dimension "default"
-            buildConfigField "boolean", "IS_RELEASE_URL", "false"
-            applicationId "com.app.initial.debug"
-        }
-
         _release {
             dimension "default"
             buildConfigField "boolean", "IS_RELEASE_URL", "true"
-            applicationId "com.app.initial"
         }
     }
 
@@ -157,10 +150,16 @@ def getGitVersion() {
 }
 
 dependencies {
-    compile fileTree(include: ['*.jar','*.aar'], dir: 'libs')
-    compile "com.github.zcolin:ZFrame:1.5.0"//程序框架  
-    compile "com.github.zcolin:ZX5WebView:1.0.1"//UI库
-    compile "com.github.zcolin:ZWebView:1.4.0"//UI库
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
+    implementation "com.github.zcolin:ZWebView:1.5.0"
+    implementation "com.github.zcolin:ZX5WebView:1.4.8"
+
+    implementation "com.github.zcolin:ZFrame:1.7.2"//程序框架  
+    implementation 'com.github.zcolin:Matisse:1.1.3'//支持多选图片
+    implementation 'com.github.zcolin.TPartyLibs:libAmapLocation:1.1.2'
+    implementation 'com.github.zcolin:ZBarCodeScanner:1.1.0'
+    implementation 'com.github.zcolin.TPartyLibs:libShareSdk:1.1.2'
+    implementation "com.github.zcolin:ZUILib:1.8.2"//UI库
     //facebook调试工具 使用chrome查看，可以进行数据库和http报文查看
     //    compile "com.facebook.stetho:stetho:1.4.2"
     //    compile "com.facebook.stetho:stetho-okhttp3:1.4.2"

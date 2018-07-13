@@ -38,8 +38,8 @@ ext {
     key_path = '../key.properties'
     release_path = '/.release_apk'
 
-    applicationId = "com.app.initial"
-    apkName = "AppInitial"
+    applicationId = "com.app.webshell"
+    apkName = "WebShell"
 
     greendaocSchemaVersion = 1
 }
