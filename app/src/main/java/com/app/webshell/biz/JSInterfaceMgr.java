@@ -12,7 +12,9 @@ package com.app.webshell.biz;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.text.TextUtils;
+import android.util.Base64;
 
 import com.amap.api.location.AMapLocation;
 import com.app.webshell.amodule.main.activity.QrCodeActivity;
@@ -27,8 +29,10 @@ import com.zcolin.frame.app.BaseFrameActivity;
 import com.zcolin.frame.permission.PermissionHelper;
 import com.zcolin.frame.permission.PermissionsResultAction;
 import com.zcolin.frame.util.AppUtil;
+import com.zcolin.frame.util.BitmapUtil;
 import com.zcolin.frame.util.DeviceUtil;
 import com.zcolin.frame.util.ToastUtil;
+import com.zcolin.gui.ZDialogAsyncProgress;
 import com.zcolin.libamaplocation.LocationUtil;
 import com.zcolin.zwebview.jsbridge.BridgeWebView;
 import com.zcolin.zwebview.jsbridge.CallBackFunction;
@@ -388,27 +392,44 @@ public class JSInterfaceMgr {
                     BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
                     try {
                         JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
-                        int maxNum = jsonApply.has("maxNum") ? jsonApply.get("maxNum").getAsInt() > 0 ? jsonApply.get("maxNum").getAsInt() : 1 : 1;
+                        int maxNum = jsonApply.has("mxaNumber") ? jsonApply.get("mxaNumber").getAsInt() > 0 ? jsonApply.get("mxaNumber").getAsInt() : 1 : 1;
                         int minPixel = jsonApply.has("minPixel") ? jsonApply.get("minPixel").getAsInt() : 0;
                         PhotoSelectedUtil.selectPhoto(activity, maxNum, (resultCode, data1) -> {
                             if (resultCode == RESULT_OK && data != null) {
                                 List<String> mSelect = Matisse.obtainPathResult(data1);
                                 if (mSelect != null && mSelect.size() > 0) {
-                                    JsonArray jsonArray = new JsonArray();
-                                    for (String s : mSelect) {
-                                        jsonArray.add(s);
-//                                        if (minPixel > 0) {
-//                                            Bitmap bitmap = BitmapUtil.decodeBitmap(s, minPixel, minPixel);
-//                                            jsonArray.add("data:image/png;base64," + BitmapUtil.toBase64(bitmap));
-//                                        } else {
-//                                            jsonArray.add("data:image/png;base64," + BitmapUtil.toBase64(s));
-//                                        }
-                                    }
+                                    ZDialogAsyncProgress.instance(webView.getContext()).setDoInterface(new ZDialogAsyncProgress.DoInterface() {
+                                        @Override
+                                        public ZDialogAsyncProgress.ProcessInfo onDoInback() {
+                                            JsonArray jsonArray = new JsonArray();
+                                            for (String s : mSelect) {
+                                                if (minPixel > 0) {
+                                                    Bitmap bitmap = BitmapUtil.decodeBitmap(s, minPixel, minPixel);
+                                                    byte[] bytes = BitmapUtil.bitmapToByte(bitmap);
+                                                    byte[] encode = Base64.encode(bytes, Base64.NO_WRAP);
+                                                    jsonArray.add("data:image/png;base64," + new String(encode));
+                                                } else {
+                                                    Bitmap bitmap = BitmapUtil.decodeBitmap(s);
+                                                    byte[] bytes = BitmapUtil.bitmapToByte(bitmap);
+                                                    byte[] encode = Base64.encode(bytes, Base64.DEFAULT);
+                                                    jsonArray.add("data:image/png;base64," + new String(encode));
+                                                }
+                                            }
 
-                                    JsonObject jsonReply = new JsonObject();
-                                    jsonReply.addProperty("code", 200);
-                                    jsonReply.add("images", jsonArray);
-                                    callBackFunction.onCallBack(jsonReply.toString());
+                                            JsonObject jsonReply = new JsonObject();
+                                            jsonReply.addProperty("code", 200);
+                                            jsonReply.add("images", jsonArray);
+
+                                            ZDialogAsyncProgress.ProcessInfo info = new ZDialogAsyncProgress.ProcessInfo();
+                                            info.msg = jsonReply.toString();
+                                            return info;
+                                        }
+
+                                        @Override
+                                        public void onPostExecute(ZDialogAsyncProgress.ProcessInfo info) {
+                                            callBackFunction.onCallBack(info.msg);
+                                        }
+                                    }).execute(0);
                                 } else {
                                     errorCallBack(callBackFunction, 0, "用户未选择图片!");
                                 }
