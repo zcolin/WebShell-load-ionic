@@ -167,33 +167,36 @@ js调用原生
 ```
 关键字：  native_selectFile
 请求参数：{
-             "multi":false,          //是否为多选， 默认false
+             "type":"image/jpeg",    //文件类型， 默认*/*
         }
 返回参数：{
             "cdoe":200,             //成功=200，失败为其他
             "msg":"xxx",            //成功可为空，失败填写失败原因
-            "files":
-            [                       //图片集合
-                ｛   
-                    "name":"xxx",  //文件名称
-                    "path":"xxx"   //在原生端的路径
-                ｝
-            ]      
+            "file":
+            ｛   
+                "name":"xxx",  //文件名称
+                "path":"xxx"   //在原生端的路径
+            ｝
         }
 回调时机：选择完文件后
 ```
 
 12. 使用http传输
 ```
-关键字：  native_selectImage
+关键字：  native_http
 请求参数：{
              "method":"post",       //post或者get，默认post
-             "params":
+             "url":"http://xxxx",   //请求地址
+             "headers":{            //报文头
+                 "key1":"value1",
+                 "key2":"value2"
+             },
+             "params":              //报文体
              {
                 "key1":"value1",
                 "key2":"value2"
              },
-             "files":{
+             "files":{              //上传文件
                 "fileName1":"path1",
                 "fileName2":"path2"
              }
@@ -201,12 +204,7 @@ js调用原生
 返回参数：{
             "cdoe":200,             //成功=200，失败为其他
             "msg":"xxx",            //成功可为空，失败填写失败原因
-            "params":               //服务器返回参数，服务器返回的code和message在params中
-            {
-                "code":200,
-                "message":"xxx",
-                "key1":"value1"
-            }
+            "result":"{"code":200,"message":"xxx","key1":"value1"}"  //服务器返回参数
         }
 回调时机：请求完成后
 ```
@@ -227,12 +225,20 @@ js调用原生
 ```
 关键字：  native_get_storage
 请求参数：{
-            "key":"keyname",
+            "keys":
+            [
+                "key1",
+                "key2"
+            ]
         }
 返回参数：{
             "cdoe":200,             //成功=200，失败为其他
             "msg":"xxx",            //成功可为空，失败填写失败原因
-            "value":"value"         //根据key获取的值
+            "result":               //根据key获取的值
+             {
+                 "key1":"value1",        //key-value
+                 "key2":"value2",        //key-value
+             }
         }
 回调时机：获取完成后
 ```

@@ -9,28 +9,36 @@
 
 package com.app.webshell.biz;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.text.TextUtils;
-import android.util.Base64;
 
 import com.amap.api.location.AMapLocation;
 import com.app.webshell.amodule.main.activity.QrCodeActivity;
 import com.app.webshell.amodule.main.activity.WebViewActivity;
 import com.app.webshell.app.App;
-import com.app.webshell.http.HttpUrl;
 import com.app.webshell.util.PhotoSelectedUtil;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.zcolin.frame.app.BaseApp;
 import com.zcolin.frame.app.BaseFrameActivity;
+import com.zcolin.frame.http.ZHttp;
+import com.zcolin.frame.http.response.ZStringResponse;
 import com.zcolin.frame.permission.PermissionHelper;
 import com.zcolin.frame.permission.PermissionsResultAction;
 import com.zcolin.frame.util.AppUtil;
 import com.zcolin.frame.util.BitmapUtil;
 import com.zcolin.frame.util.DeviceUtil;
+import com.zcolin.frame.util.LogUtil;
+import com.zcolin.frame.util.NUriParseUtil;
+import com.zcolin.frame.util.NetworkUtil;
+import com.zcolin.frame.util.SPUtil;
 import com.zcolin.frame.util.ToastUtil;
 import com.zcolin.gui.ZDialogAsyncProgress;
 import com.zcolin.libamaplocation.LocationUtil;
@@ -38,11 +46,19 @@ import com.zcolin.zwebview.jsbridge.BridgeWebView;
 import com.zcolin.zwebview.jsbridge.CallBackFunction;
 import com.zhihu.matisse.Matisse;
 
+import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.SocketTimeoutException;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import cn.sharesdk.util.ShareSocial;
+import okhttp3.Call;
+import okhttp3.Response;
 
 import static android.app.Activity.RESULT_OK;
 
@@ -64,7 +80,10 @@ public class JSInterfaceMgr {
     private static final String NATIVE_SCAN_QRCODE  = "native_scanQrCode";       //调用原生扫描二维码
     private static final String NATIVE_LOCATION     = "native_location";         //调用原生定位
     private static final String NATIVE_SELECT_IMAGE = "native_selectImage";      //调用原生选择图片
-
+    private static final String NATIVE_SELECT_FILE  = "native_selectFile";       //调用选择文件
+    private static final String NATIVE_HTTP         = "native_http";             //调用http
+    private static final String NATIVE_PUT_STORAGE  = "native_put_storage";      //存储本地值
+    private static final String NATIVE_GET_STORAGE  = "native_get_storage";      //获取本地值
 
     /**
      * 使用ionic的pagename和params拼接成url
@@ -72,31 +91,14 @@ public class JSInterfaceMgr {
     public static String getUrl(String pageName, String params) {
         String url = null;
         if (pageName != null) {
-            url = String.format("file:///android_asset/www/index.html?pageName=%s&token=%s&baseUrl=%s", pageName, UserMgr.getTokenFromFile(), HttpUrl.BASE_URL);
+            //            url = String.format("file:///android_asset/www/index.html?pageName=%s", pageName);
+            url = String.format("http://10.10.38.145:8100?pageName=%s", pageName);
+
             if (!TextUtils.isEmpty(params)) {
                 url += "&params=" + params;
             }
         }
         return url;
-    }
-
-    /**
-     * 原生调用js返回函数，回调时result为true表示js拦截了返回，result为false表示js没有拦截返回。
-     */
-    public static void goBack(BridgeWebView webView, CallBackFunction callBackFunction) {
-        if (webView != null) {
-            webView.callHandler(JS_GOBACK, "", s -> {
-                try {
-                    JsonObject jsonApply = new JsonParser().parse(s).getAsJsonObject();
-                    boolean result = jsonApply.get("result").getAsBoolean();
-                    if (callBackFunction != null) {
-                        callBackFunction.onCallBack(String.valueOf(result));
-                    }
-                } catch (Exception e) {
-                    errorCallBack(callBackFunction, 0, "json 解析失败!");
-                }
-            });
-        }
     }
 
     /**
@@ -119,6 +121,24 @@ public class JSInterfaceMgr {
     }
 
     /**
+     * 原生调用js返回函数，回调时result为true表示js拦截了返回，result为false表示js没有拦截返回。
+     */
+    public static void goBack(BridgeWebView webView, CallBackFunction callBackFunction) {
+        webView.callHandler(JS_GOBACK, "", s -> {
+            try {
+                JsonObject jsonApply = new JsonParser().parse(s).getAsJsonObject();
+                boolean result = jsonApply.get("result").getAsBoolean();
+                if (callBackFunction != null) {
+                    callBackFunction.onCallBack(String.valueOf(result));
+                }
+            } catch (Exception e) {
+                errorCallBack(callBackFunction, 0, "json 解析失败!");
+            }
+        });
+    }
+
+
+    /**
      * 注册js调用原生启动新页面（ionic pageName页面）功能
      * 请求数据格式｛"pageName":"HomePage", "params":"{'xxx':'xxx'}","title":"我是title"｝, 其中params是ionic传递个下一个页面的参数, title为标题文字
      */
@@ -128,8 +148,8 @@ public class JSInterfaceMgr {
             try {
                 JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
                 String pageName = jsonApply.get("pageName").getAsString();
-                String params = jsonApply.has("params") ? jsonApply.get("params").getAsString() : null;
-                String title = jsonApply.has("title") ? jsonApply.get("title").getAsString() : null;
+                String params = jsonApply.has("params") ? !jsonApply.get("params").isJsonNull() ? jsonApply.get("params").getAsString() : null : null;
+                String title = jsonApply.has("title") ? !jsonApply.get("title").isJsonNull() ? jsonApply.get("title").getAsString() : null : null;
                 Intent intent = new Intent(context, WebViewActivity.class);
                 intent.putExtra("url", JSInterfaceMgr.getUrl(pageName, params));
                 intent.putExtra("title", title);
@@ -144,9 +164,7 @@ public class JSInterfaceMgr {
                     });
                 } else {
                     context.startActivity(intent);
-                    if (callBackFunction != null) {
-                        successCallBack(callBackFunction);
-                    }
+                    successCallBack(callBackFunction);
                 }
             } catch (Exception e) {
                 errorCallBack(callBackFunction, 0, "json 解析失败!");
@@ -164,7 +182,7 @@ public class JSInterfaceMgr {
             try {
                 JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
                 String url = jsonApply.get("url").getAsString();
-                String title = jsonApply.has("title") ? jsonApply.get("title").getAsString() : null;
+                String title = jsonApply.has("title") ? !jsonApply.get("title").isJsonNull() ? jsonApply.get("title").getAsString() : null : null;
                 Intent intent = new Intent(context, WebViewActivity.class);
                 intent.putExtra("url", url);
                 intent.putExtra("title", title);
@@ -180,30 +198,10 @@ public class JSInterfaceMgr {
                     });
                 } else {
                     context.startActivity(intent);
-                    if (callBackFunction != null) {
-                        successCallBack(callBackFunction);
-                    }
+                    successCallBack(callBackFunction);
                 }
             } catch (Exception e) {
                 errorCallBack(callBackFunction, 0, "json 解析失败!");
-            }
-        });
-    }
-
-    /**
-     * 注册js调用原生重新登录功能
-     */
-    public static void registerReLogin(BridgeWebView webView) {
-        webView.registerHandler(NATIVE_RELOGIN, (data, callBackFunction) -> {
-            Context context = webView.getContext();
-            UserMgr.logout();
-            //            AppUtil.quitSystem();
-            //            Intent intent = new Intent();
-            //            intent.setClass(context, LoginActivity.class);
-            //            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            //            context.startActivity(intent);
-            if (callBackFunction != null) {
-                successCallBack(callBackFunction);
             }
         });
     }
@@ -218,9 +216,7 @@ public class JSInterfaceMgr {
                     ((Activity) webView.getContext()).finish();
                 }
 
-                if (callBackFunction != null) {
-                    successCallBack(callBackFunction);
-                }
+                successCallBack(callBackFunction);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -235,17 +231,15 @@ public class JSInterfaceMgr {
         webView.registerHandler(NATIVE_TOAST, (data, callBackFunction) -> {
             try {
                 JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
-                String message = jsonApply.has("message") ? jsonApply.get("message").getAsString() : "";
-                long duration = jsonApply.has("duration") ? jsonApply.get("duration").getAsLong() : 0;
+                String message = jsonApply.has("message") ? !jsonApply.get("message").isJsonNull() ? jsonApply.get("message").getAsString() : "" : "";
+                long duration = jsonApply.has("duration") ? !jsonApply.get("duration").isJsonNull() ? jsonApply.get("duration").getAsLong() : 0 : 0;
                 if (duration > 2000) {
                     ToastUtil.toastLong(message);
                 } else {
                     ToastUtil.toastShort(message);
                 }
 
-                if (callBackFunction != null) {
-                    successCallBack(callBackFunction);
-                }
+                successCallBack(callBackFunction);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -289,54 +283,33 @@ public class JSInterfaceMgr {
     }
 
     /**
-     * 注册js调用定位功能
+     * 注册js调用分享功能
      * <p>
-     * 返回数据格式：｛"code":200,"msg":"", "latitude":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",....｝
+     * 请求数据格式：｛"title":"xx","content":"xxx","targetUrl":"xxx","imageUrl":"xxx"｝
+     * 返回数据:{"code":200,"msg":""}
      */
-    public static void registerLocation(BridgeWebView webView) {
-        webView.registerHandler(NATIVE_LOCATION, (data, callBackFunction) -> {
-            if (callBackFunction != null) {
-                if (webView.getContext() != null && webView.getContext() instanceof BaseFrameActivity) {
-                    BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
-                    PermissionHelper.requestLocationPermission(activity, new PermissionsResultAction() {
-                        @Override
-                        public void onGranted() {
-                            LocationUtil locationUtil = new LocationUtil(App.APP_CONTEXT);
-                            locationUtil.startLocation(new LocationUtil.OnGetLocation() {
-                                @Override
-                                public void getLocation(AMapLocation aMapLocation) {
-                                    JsonObject jsonReply = new JsonObject();
-                                    jsonReply.addProperty("code", 200);
-                                    jsonReply.addProperty("latitude", aMapLocation.getLatitude());
-                                    jsonReply.addProperty("longitude", aMapLocation.getLongitude());
-                                    jsonReply.addProperty("province", aMapLocation.getProvince());
-                                    jsonReply.addProperty("city", aMapLocation.getCity());
-                                    jsonReply.addProperty("cityCode", aMapLocation.getCityCode());
-                                    jsonReply.addProperty("district", aMapLocation.getDistrict());
-                                    jsonReply.addProperty("adCode", aMapLocation.getAdCode());
-                                    jsonReply.addProperty("address", aMapLocation.getAddress());
-                                    jsonReply.addProperty("road", aMapLocation.getRoad());
-                                    jsonReply.addProperty("street", aMapLocation.getStreet());
-                                    jsonReply.addProperty("streetNum", aMapLocation.getStreetNum());
-                                    jsonReply.addProperty("country", aMapLocation.getCountry());
-                                    callBackFunction.onCallBack(jsonReply.toString());
-                                }
+    public static void registerShare(BridgeWebView webView) {
+        webView.registerHandler(NATIVE_SHARE, (data, callBackFunction) -> {
+            if (webView.getContext() == null) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
 
-                                @Override
-                                public void locationFail() {
-                                    errorCallBack(callBackFunction, 0, "定位失败！");
-                                }
-                            });
-                        }
+            try {
+                JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
+                String title = jsonApply.has("title") ? !jsonApply.get("title").isJsonNull() ? jsonApply.get("title").getAsString() : "" : "";
+                String content = jsonApply.has("content") ? !jsonApply.get("content").isJsonNull() ? jsonApply.get("content").getAsString() : "" : "";
+                String targetUrl = jsonApply.has("targetUrl") ? !jsonApply.get("targetUrl").isJsonNull() ? jsonApply.get("targetUrl").getAsString() : "" : "";
+                String imageUrl = jsonApply.has("imageUrl") ? !jsonApply.get("imageUrl").isJsonNull() ? jsonApply.get("imageUrl").getAsString() : "" : "";
+                ShareSocial.instance().setTitle(title).setContent(content).setTargetUrl(targetUrl).setImgUrl(imageUrl).share(webView.getContext());
 
-                        @Override
-                        public void onDenied(String permission) {
-                            errorCallBack(callBackFunction, 0, "用户未授予定位权限！");
-                        }
-                    });
-                } else {
-                    errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                if (callBackFunction != null) {
+                    JsonObject jsonReply = new JsonObject();
+                    jsonReply.addProperty("code", 200);
+                    callBackFunction.onCallBack(jsonReply.toString());
                 }
+            } catch (Exception e) {
+                errorCallBack(callBackFunction, 0, "json 解析失败!");
             }
         });
     }
@@ -348,149 +321,461 @@ public class JSInterfaceMgr {
      */
     public static void registerScanQrCode(BridgeWebView webView) {
         webView.registerHandler(NATIVE_SCAN_QRCODE, (data, callBackFunction) -> {
-            if (callBackFunction != null) {
-                if (webView.getContext() != null && webView.getContext() instanceof BaseFrameActivity) {
-                    BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
-                    PermissionHelper.requestCameraPermission(activity, new PermissionsResultAction() {
+            if (callBackFunction == null) {
+                return;
+            }
+
+            if (webView.getContext() == null || !(webView.getContext() instanceof BaseFrameActivity)) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
+
+            BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
+            PermissionHelper.requestCameraPermission(activity, new PermissionsResultAction() {
+                @Override
+                public void onGranted() {
+                    Intent intent = new Intent(activity, QrCodeActivity.class);
+                    activity.startActivityWithCallback(intent, (resultCode, data1) -> {
+                        if (resultCode == RESULT_OK) {
+                            JsonObject jsonReply = new JsonObject();
+                            jsonReply.addProperty("code", 200);
+                            jsonReply.addProperty("result", data1.getStringExtra("data"));
+                            callBackFunction.onCallBack(jsonReply.toString());
+                        } else {
+                            errorCallBack(callBackFunction, 0, "未扫描到二维码！");
+                        }
+                    });
+                }
+
+                @Override
+                public void onDenied(String permission) {
+                    errorCallBack(callBackFunction, 0, "用户未授予摄像头权限！");
+                }
+            });
+        });
+    }
+
+    /**
+     * 注册js调用定位功能
+     * <p>
+     * 返回数据格式：｛"code":200,"msg":"", "latitude":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",....｝
+     */
+    public static void registerLocation(BridgeWebView webView) {
+        webView.registerHandler(NATIVE_LOCATION, (data, callBackFunction) -> {
+            if (callBackFunction == null) {
+                return;
+            }
+
+            if (webView.getContext() == null || !(webView.getContext() instanceof BaseFrameActivity)) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
+
+            BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
+            PermissionHelper.requestLocationPermission(activity, new PermissionsResultAction() {
+                @Override
+                public void onGranted() {
+                    LocationUtil locationUtil = new LocationUtil(App.APP_CONTEXT);
+                    locationUtil.startLocation(new LocationUtil.OnGetLocation() {
                         @Override
-                        public void onGranted() {
-                            Intent intent = new Intent(activity, QrCodeActivity.class);
-                            activity.startActivityWithCallback(intent, (resultCode, data1) -> {
-                                if (resultCode == RESULT_OK) {
-                                    JsonObject jsonReply = new JsonObject();
-                                    jsonReply.addProperty("code", 200);
-                                    jsonReply.addProperty("result", data1.getStringExtra("data"));
-                                    callBackFunction.onCallBack(jsonReply.toString());
-                                } else {
-                                    errorCallBack(callBackFunction, 0, "未扫描到二维码！");
-                                }
-                            });
+                        public void getLocation(AMapLocation aMapLocation) {
+                            JsonObject jsonReply = new JsonObject();
+                            jsonReply.addProperty("code", 200);
+                            jsonReply.addProperty("latitude", aMapLocation.getLatitude());
+                            jsonReply.addProperty("longitude", aMapLocation.getLongitude());
+                            jsonReply.addProperty("province", aMapLocation.getProvince());
+                            jsonReply.addProperty("city", aMapLocation.getCity());
+                            jsonReply.addProperty("cityCode", aMapLocation.getCityCode());
+                            jsonReply.addProperty("district", aMapLocation.getDistrict());
+                            jsonReply.addProperty("adCode", aMapLocation.getAdCode());
+                            jsonReply.addProperty("address", aMapLocation.getAddress());
+                            jsonReply.addProperty("road", aMapLocation.getRoad());
+                            jsonReply.addProperty("street", aMapLocation.getStreet());
+                            jsonReply.addProperty("streetNum", aMapLocation.getStreetNum());
+                            jsonReply.addProperty("country", aMapLocation.getCountry());
+                            callBackFunction.onCallBack(jsonReply.toString());
                         }
 
                         @Override
-                        public void onDenied(String permission) {
-                            errorCallBack(callBackFunction, 0, "用户未授予摄像头权限！");
+                        public void locationFail() {
+                            errorCallBack(callBackFunction, 0, "定位失败！");
                         }
                     });
-                } else {
-                    errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
                 }
-            }
+
+                @Override
+                public void onDenied(String permission) {
+                    errorCallBack(callBackFunction, 0, "用户未授予定位权限！");
+                }
+            });
         });
     }
+
 
     /**
      * 注册js调用选择照片功能
      * <p>
-     * 请求数据格式：｛"maxNum":"9", "minPixel":1024｝
+     * 请求数据格式：｛"mxaNumber":"9", "minPixel":1024｝
      * 返回数据格式：｛"code":200,"msg":"", "images":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"｝
      */
-    public static void registerSelectImgage(BridgeWebView webView) {
+    public static void registerSelectImage(BridgeWebView webView) {
         webView.registerHandler(NATIVE_SELECT_IMAGE, (data, callBackFunction) -> {
-            if (callBackFunction != null) {
-                if (webView.getContext() != null && webView.getContext() instanceof BaseFrameActivity) {
-                    BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
-                    try {
-                        JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
-                        int maxNum = jsonApply.has("mxaNumber") ? jsonApply.get("mxaNumber").getAsInt() > 0 ? jsonApply.get("mxaNumber").getAsInt() : 1 : 1;
-                        int minPixel = jsonApply.has("minPixel") ? jsonApply.get("minPixel").getAsInt() : 0;
-                        PhotoSelectedUtil.selectPhoto(activity, maxNum, (resultCode, data1) -> {
-                            if (resultCode == RESULT_OK && data != null) {
-                                List<String> mSelect = Matisse.obtainPathResult(data1);
-                                if (mSelect != null && mSelect.size() > 0) {
-                                    ZDialogAsyncProgress.instance(webView.getContext()).setDoInterface(new ZDialogAsyncProgress.DoInterface() {
-                                        @Override
-                                        public ZDialogAsyncProgress.ProcessInfo onDoInback() {
-                                            JsonArray jsonArray = new JsonArray();
-                                            for (String s : mSelect) {
-                                                if (minPixel > 0) {
-                                                    Bitmap bitmap = BitmapUtil.decodeBitmap(s, minPixel, minPixel);
-                                                    byte[] bytes = BitmapUtil.bitmapToByte(bitmap);
-                                                    byte[] encode = Base64.encode(bytes, Base64.NO_WRAP);
-                                                    jsonArray.add("data:image/png;base64," + new String(encode));
-                                                } else {
-                                                    Bitmap bitmap = BitmapUtil.decodeBitmap(s);
-                                                    byte[] bytes = BitmapUtil.bitmapToByte(bitmap);
-                                                    byte[] encode = Base64.encode(bytes, Base64.DEFAULT);
-                                                    jsonArray.add("data:image/png;base64," + new String(encode));
-                                                }
-                                            }
-
-                                            JsonObject jsonReply = new JsonObject();
-                                            jsonReply.addProperty("code", 200);
-                                            jsonReply.add("images", jsonArray);
-
-                                            ZDialogAsyncProgress.ProcessInfo info = new ZDialogAsyncProgress.ProcessInfo();
-                                            info.msg = jsonReply.toString();
-                                            return info;
-                                        }
-
-                                        @Override
-                                        public void onPostExecute(ZDialogAsyncProgress.ProcessInfo info) {
-                                            callBackFunction.onCallBack(info.msg);
-                                        }
-                                    }).execute(0);
-                                } else {
-                                    errorCallBack(callBackFunction, 0, "用户未选择图片!");
-                                }
-                            } else {
-                                errorCallBack(callBackFunction, 0, "用户未选择图片!");
-                            }
-                        });
-                    } catch (Exception e) {
-                        errorCallBack(callBackFunction, 0, "json 解析失败!");
-                    }
-                } else {
-                    errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
-                }
+            if (callBackFunction == null) {
+                return;
             }
+
+            if (webView.getContext() == null || !(webView.getContext() instanceof BaseFrameActivity)) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
+
+            int maxNum = 1;
+            int minPixel = 0;
+            try {
+                JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
+                maxNum = jsonApply.has("mxaNumber") ? jsonApply.get("mxaNumber").getAsInt() > 0 ? jsonApply.get("mxaNumber").getAsInt() : 1 : 1;
+                minPixel = jsonApply.has("minPixel") ? jsonApply.get("minPixel").getAsInt() : 0;
+            } catch (Exception e) {
+                errorCallBack(callBackFunction, 0, "json 解析失败!");
+            }
+
+            int finalMinPixel = minPixel;
+            BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
+            PhotoSelectedUtil.selectPhoto(activity, maxNum, (resultCode, data1) -> {
+                if (resultCode != RESULT_OK || data1 == null) {
+                    errorCallBack(callBackFunction, 0, "用户取消选择!");
+                    return;
+                }
+
+                List<String> mSelect = Matisse.obtainPathResult(data1);
+                if (mSelect == null || mSelect.size() == 0) {
+                    errorCallBack(callBackFunction, 0, "用户未选择图片!");
+                    return;
+                }
+
+                ZDialogAsyncProgress.instance(webView.getContext()).setDoInterface(new ZDialogAsyncProgress.DoInterface() {
+                    @Override
+                    public ZDialogAsyncProgress.ProcessInfo onDoInback() {
+                        JsonArray jsonArray = new JsonArray();
+                        for (String s : mSelect) {
+                            Bitmap bitmap = null;
+                            if (finalMinPixel > 0) {
+                                bitmap = BitmapUtil.decodeBitmap(s, finalMinPixel, finalMinPixel);
+                            } else {
+                                bitmap = BitmapUtil.decodeBitmap(s);
+                            }
+
+                            JsonObject jsonObj = new JsonObject();
+                            jsonObj.addProperty("name", new File(s).getName());
+                            jsonObj.addProperty("data", "data:image/png;base64," + BitmapUtil.toBase64(bitmap));
+                            jsonObj.addProperty("path", s);
+                            jsonArray.add(jsonObj);
+                        }
+
+                        JsonObject jsonReply = new JsonObject();
+                        jsonReply.addProperty("code", 200);
+                        jsonReply.add("images", jsonArray);
+
+                        ZDialogAsyncProgress.ProcessInfo info = new ZDialogAsyncProgress.ProcessInfo();
+                        info.msg = jsonReply.toString();
+                        return info;
+                    }
+
+                    @Override
+                    public void onPostExecute(ZDialogAsyncProgress.ProcessInfo info) {
+                        callBackFunction.onCallBack(info.msg);
+                    }
+                }).execute(0);
+            });
         });
     }
 
     /**
-     * 注册js调用分享功能
+     * 注册js调用选择文件功能
      * <p>
-     * 请求数据格式：｛"title":"xx","content":"xxx","targetUrl":"xxx","imageUrl":"xxx"｝
-     * 返回数据:{"code":200,"msg":""}
+     * 请求数据格式：｛"type":"image/jpeg"｝ 默认*\/*
+     * 返回数据格式：｛"code":200,"msg":"", "images":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"｝
      */
-    public static void registerShare(BridgeWebView webView) {
-        webView.registerHandler(NATIVE_SHARE, (data, callBackFunction) -> {
-            if (callBackFunction != null) {
-                if (webView.getContext() != null && webView.getContext() instanceof BaseFrameActivity) {
-                    BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
+    public static void registerSelectFile(BridgeWebView webView) {
+        webView.registerHandler(NATIVE_SELECT_FILE, (data, callBackFunction) -> {
+            if (callBackFunction == null) {
+                return;
+            }
+
+            if (webView.getContext() == null || !(webView.getContext() instanceof BaseFrameActivity)) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
+
+            BaseFrameActivity activity = ((BaseFrameActivity) webView.getContext());
+            PermissionHelper.requestPermission(activity, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, new PermissionsResultAction() {
+                @Override
+                public void onGranted() {
+                    String type = "*/*";
                     try {
                         JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
-                        String title = jsonApply.has("title") ? jsonApply.get("title").getAsString() : "";
-                        String content = jsonApply.has("content") ? jsonApply.get("content").getAsString() : "";
-                        String targetUrl = jsonApply.has("targetUrl") ? jsonApply.get("targetUrl").getAsString() : "";
-                        String imageUrl = jsonApply.has("imageUrl") ? jsonApply.get("imageUrl").getAsString() : "";
-                        ShareSocial.instance().setTitle(title).setContent(content).setTargetUrl(targetUrl).setImgUrl(imageUrl).share(activity);
-
-                        JsonObject jsonReply = new JsonObject();
-                        jsonReply.addProperty("code", 200);
-                        callBackFunction.onCallBack(jsonReply.toString());
+                        type = jsonApply.has("type") ? jsonApply.get("type").getAsString() : "*/*";
                     } catch (Exception e) {
                         errorCallBack(callBackFunction, 0, "json 解析失败!");
                     }
-                } else {
-                    errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+
+                    Intent intent = new Intent();
+                    intent.setAction(Intent.ACTION_GET_CONTENT);
+                    intent.setType(type);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    activity.startActivityWithCallback(intent, (resultCode, data12) -> {
+                        if (resultCode != RESULT_OK || data12 == null || data12.getData() == null) {
+                            errorCallBack(callBackFunction, 0, "用户取消选择!");
+                            return;
+                        }
+
+                        Uri uri = data12.getData();
+                        File file = NUriParseUtil.getFileFromUri(uri);
+                        if (file != null) {
+                            JsonObject jsonObj = new JsonObject();
+                            jsonObj.addProperty("name", file.getName());
+                            jsonObj.addProperty("path", file.getAbsolutePath());
+                            JsonObject jsonReply = new JsonObject();
+                            jsonReply.addProperty("code", 200);
+                            jsonReply.add("file", jsonObj);
+                            callBackFunction.onCallBack(jsonReply.toString());
+                        } else {
+                            errorCallBack(callBackFunction, 0, "文件不存在");
+                        }
+                    });
                 }
+
+                @Override
+                public void onDenied(String permission) {
+                    errorCallBack(callBackFunction, 0, "用户未授权!");
+                }
+            });
+        });
+    }
+
+    /**
+     * 注册js调用选择文件功能
+     * <p>
+     * 请求数据格式：｛"type":"image/jpeg"｝ 默认*\/*
+     * 返回数据格式：｛"code":200,"msg":"", "images":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"｝
+     */
+    public static void registerHttp(BridgeWebView webView) {
+        webView.registerHandler(NATIVE_HTTP, (data, callBackFunction) -> {
+            if (callBackFunction == null) {
+                return;
+            }
+
+            String method = "post";
+            String url = null;
+            LinkedHashMap<String, String> headers = null;
+            HashMap<String, String> params = null;
+            HashMap<String, File> files = null;
+            try {
+                JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
+                if (jsonApply.has("url")) {
+                    url = jsonApply.get("url").getAsString();
+                } else {
+                    errorCallBack(callBackFunction, 0, "url信息错误!");
+                }
+
+                if (jsonApply.has("method")) {
+                    method = !jsonApply.get("method").isJsonNull() ? jsonApply.get("method").getAsString() : "post";
+                }
+
+                if (jsonApply.has("headers")) {
+                    JsonObject jsonHeaders = !jsonApply.get("headers").isJsonNull() ? jsonApply.get("headers").getAsJsonObject() : null;
+                    if (jsonHeaders != null) {
+                        headers = new LinkedHashMap<>();
+                        Set<Map.Entry<String, JsonElement>> jsonHeadersSet = jsonHeaders.entrySet();
+                        for (Map.Entry<String, JsonElement> stringJsonElementEntry : jsonHeadersSet) {
+                            headers.put(stringJsonElementEntry.getKey(), stringJsonElementEntry.getValue().getAsString());
+                        }
+                    }
+                }
+
+                if (jsonApply.has("params")) {
+                    JsonObject jsonParams = !jsonApply.get("params").isJsonNull() ? jsonApply.get("params").getAsJsonObject() : null;
+                    if (jsonParams != null) {
+                        params = new HashMap<>();
+                        Set<Map.Entry<String, JsonElement>> jsonHeadersSet = jsonParams.entrySet();
+                        for (Map.Entry<String, JsonElement> stringJsonElementEntry : jsonHeadersSet) {
+                            params.put(stringJsonElementEntry.getKey(), stringJsonElementEntry.getValue().getAsString());
+                        }
+                    }
+                }
+
+                if (jsonApply.has("files")) {
+                    JsonObject jsonFiles = !jsonApply.get("files").isJsonNull() ? jsonApply.get("files").getAsJsonObject() : null;
+                    if (jsonFiles != null) {
+                        files = new HashMap<>();
+                        Set<Map.Entry<String, JsonElement>> jsonHeadersSet = jsonFiles.entrySet();
+                        for (Map.Entry<String, JsonElement> stringJsonElementEntry : jsonHeadersSet) {
+                            files.put(stringJsonElementEntry.getKey(), new File(stringJsonElementEntry.getValue().getAsString()));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                errorCallBack(callBackFunction, 0, "json 解析失败!");
+                return;
+            }
+
+            if (files != null && files.size() > 0) {
+                ZHttp.uploadFileWithHeadr(url, headers, params, files, new ZStringResponse() {
+                    @Override
+                    public void onSuccess(Response response, String resObj) {
+                        JsonObject jsonReply = new JsonObject();
+                        jsonReply.addProperty("code", 200);
+                        jsonReply.addProperty("result", resObj);
+                        callBackFunction.onCallBack(jsonReply.toString());
+                    }
+
+                    @Override
+                    public void onError(int code, Call call, Exception e) {
+                        httpErrorCallBack(callBackFunction, code, e);
+                    }
+
+                });
+            } else if ("get".equals(method)) {
+                ZHttp.getWithHeader(url, headers, params, new ZStringResponse() {
+                    @Override
+                    public void onSuccess(Response response, String resObj) {
+                        JsonObject jsonReply = new JsonObject();
+                        jsonReply.addProperty("code", 200);
+                        jsonReply.addProperty("result", resObj);
+                        callBackFunction.onCallBack(jsonReply.toString());
+                    }
+
+                    @Override
+                    public void onError(int code, Call call, Exception e) {
+                        httpErrorCallBack(callBackFunction, code, e);
+                    }
+                });
+            } else {
+                ZHttp.postWithHeader(url, headers, params, new ZStringResponse() {
+                    @Override
+                    public void onSuccess(Response response, String resObj) {
+                        JsonObject jsonReply = new JsonObject();
+                        jsonReply.addProperty("code", 200);
+                        jsonReply.addProperty("result", resObj);
+                        callBackFunction.onCallBack(jsonReply.toString());
+                    }
+
+                    @Override
+                    public void onError(int code, Call call, Exception e) {
+                        httpErrorCallBack(callBackFunction, code, e);
+                    }
+                });
             }
         });
     }
 
-    private static void errorCallBack(CallBackFunction callBackFunction, int code, String msg) {
-        JsonObject jsonReply = new JsonObject();
-        if (code != 0) {
-            jsonReply.addProperty("code", code);
+    private static void httpErrorCallBack(CallBackFunction callBackFunction, int code, Exception ex) {
+        if (callBackFunction == null) {
+            return;
         }
-        jsonReply.addProperty("msg", msg);
-        callBackFunction.onCallBack(jsonReply.toString());
+        String str;
+        if (ex instanceof SocketTimeoutException || code == 0) {
+            if (!NetworkUtil.isNetworkAvailable(BaseApp.APP_CONTEXT)) {
+                str = "当前无网络连接，请开启网络！";
+            } else {
+                str = "连接服务器失败, 请检查网络或稍后重试";
+            }
+            errorCallBack(callBackFunction, 0, str);
+        } else {
+            errorCallBack(callBackFunction, code, LogUtil.ExceptionToString(ex));
+        }
     }
 
+    /**
+     * 存放本地值
+     * 请求数据格式：{"key1":"value1","key2":"value2"}
+     * 返回数据格式：｛"code":200,"msg":""｝
+     */
+    public static void registerPutStorage(BridgeWebView webView) {
+        webView.registerHandler(NATIVE_PUT_STORAGE, (data, callBackFunction) -> {
+            if (webView.getContext() == null || !(webView.getContext() instanceof BaseFrameActivity)) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
+
+            HashMap<String, String> params = new HashMap<>();
+            try {
+                JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
+                Set<Map.Entry<String, JsonElement>> jsonHeadersSet = jsonApply.entrySet();
+                for (Map.Entry<String, JsonElement> stringJsonElementEntry : jsonHeadersSet) {
+                    params.put(stringJsonElementEntry.getKey(), stringJsonElementEntry.getValue().getAsString());
+                }
+            } catch (Exception e) {
+                errorCallBack(callBackFunction, 0, "json 解析失败!");
+                return;
+            }
+
+            Set<Map.Entry<String, String>> entrySet = params.entrySet();
+            for (Map.Entry<String, String> stringStringEntry : entrySet) {
+                SPUtil.putString(stringStringEntry.getKey(), stringStringEntry.getValue());
+            }
+            successCallBack(callBackFunction);
+        });
+    }
+
+    /**
+     * 获取本地值
+     * 请求数据格式：{"key":"xxx"}
+     * 返回数据格式：｛"code":200,"msg":""｝
+     */
+    public static void registerGetStorage(BridgeWebView webView) {
+        webView.registerHandler(NATIVE_GET_STORAGE, (data, callBackFunction) -> {
+            if (webView.getContext() == null || !(webView.getContext() instanceof BaseFrameActivity)) {
+                errorCallBack(callBackFunction, 0, "WebView 运行环境错误!");
+                return;
+            }
+
+            HashMap<String, String> params = new HashMap<>();
+            try {
+                JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
+                JsonArray jsonArray = jsonApply.get("keys").getAsJsonArray();
+                for (JsonElement jsonElement : jsonArray) {
+                    params.put(jsonElement.getAsString(), SPUtil.getString(jsonElement.getAsString(), null));
+                }
+            } catch (Exception e) {
+                errorCallBack(callBackFunction, 0, "json 解析失败!");
+                return;
+            }
+
+            JsonObject jsonReply = new JsonObject();
+            jsonReply.addProperty("code", 200);
+            JsonObject jsonObject = new JsonObject();
+            Set<Map.Entry<String, String>> entries = params.entrySet();
+            for (Map.Entry<String, String> stringStringEntry : entries) {
+                jsonObject.addProperty(stringStringEntry.getKey(), stringStringEntry.getValue());
+            }
+            jsonReply.add("result", jsonObject);
+            callBackFunction.onCallBack(jsonReply.toString());
+        });
+    }
+
+    /**
+     * 通用错误返回
+     */
+    private static void errorCallBack(CallBackFunction callBackFunction, int code, String msg) {
+        if (callBackFunction != null) {
+            JsonObject jsonReply = new JsonObject();
+            if (code != 0) {
+                jsonReply.addProperty("code", code);
+            }
+            jsonReply.addProperty("msg", msg);
+            callBackFunction.onCallBack(jsonReply.toString());
+        }
+    }
+
+    /**
+     * 通用成功返回
+     */
     private static void successCallBack(CallBackFunction callBackFunction) {
-        JsonObject jsonReply = new JsonObject();
-        jsonReply.addProperty("code", 200);
-        callBackFunction.onCallBack(jsonReply.toString());
+        if (callBackFunction != null) {
+            JsonObject jsonReply = new JsonObject();
+            jsonReply.addProperty("code", 200);
+            callBackFunction.onCallBack(jsonReply.toString());
+        }
     }
 }
