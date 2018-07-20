@@ -415,7 +415,7 @@ public class JSInterfaceMgr {
     /**
      * 注册js调用选择照片功能
      * <p>
-     * 请求数据格式：｛"mxaNumber":"9", "minPixel":1024｝
+     * 请求数据格式：｛"maxNumber":"9", "minPixel":1024｝
      * 返回数据格式：｛"code":200,"msg":"", "images":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"｝
      */
     public static void registerSelectImage(BridgeWebView webView) {
@@ -433,7 +433,7 @@ public class JSInterfaceMgr {
             int minPixel = 0;
             try {
                 JsonObject jsonApply = new JsonParser().parse(data).getAsJsonObject();
-                maxNum = jsonApply.has("mxaNumber") ? jsonApply.get("mxaNumber").getAsInt() > 0 ? jsonApply.get("mxaNumber").getAsInt() : 1 : 1;
+                maxNum = jsonApply.has("maxNumber") ? jsonApply.get("maxNumber").getAsInt() > 0 ? jsonApply.get("maxNumber").getAsInt() : 1 : 1;
                 minPixel = jsonApply.has("minPixel") ? jsonApply.get("minPixel").getAsInt() : 0;
             } catch (Exception e) {
                 errorCallBack(callBackFunction, 0, "json 解析失败!");
