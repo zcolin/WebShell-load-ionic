@@ -150,16 +150,17 @@ def getGitVersion() {
 }
 
 dependencies {
-    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
-    implementation "com.github.zcolin:ZWebView:1.5.0"
-    implementation "com.github.zcolin:ZX5WebView:1.4.8"
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs') 
+    implementation "com.android.support:appcompat-v7:$supprotVersion"
+    implementation "com.github.zcolin:ZWebView:2.0.1"
+    implementation "com.github.zcolin:ZX5WebView:2.0.0"
 
-    implementation "com.github.zcolin:ZFrame:1.7.6"//程序框架  
-    implementation 'com.github.zcolin:Matisse:1.1.3'//支持多选图片
-    implementation 'com.github.zcolin.TPartyLibs:libAmapLocation:1.1.2'
-    implementation 'com.github.zcolin:ZBarCodeScanner:1.1.0'
-    implementation 'com.github.zcolin.TPartyLibs:libShareSdk:1.1.2'
-    implementation "com.github.zcolin:ZUILib:1.8.2"//UI库
+    implementation "com.github.zcolin:ZFrame:2.0.9"//程序框架  
+    implementation 'com.github.zcolin:Matisse:2.0.0'//支持多选图片
+    implementation 'com.github.zcolin.TPartyLibs:libAmapLocation:1.1.4'
+    implementation 'com.github.zcolin:ZBarCodeScanner:2.0.0'
+    implementation 'com.github.zcolin.TPartyLibs:libShareSdk:1.1.4' 
+    implementation "com.github.zcolin:ZUILib:2.0.0"//UI库
     //facebook调试工具 使用chrome查看，可以进行数据库和http报文查看
     //    compile "com.facebook.stetho:stetho:1.4.2"
     //    compile "com.facebook.stetho:stetho-okhttp3:1.4.2"

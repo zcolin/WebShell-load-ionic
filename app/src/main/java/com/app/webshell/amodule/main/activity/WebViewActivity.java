@@ -55,10 +55,12 @@ public class WebViewActivity extends BaseActivity {
         }
     }
 
+    @Override
     protected void onToolBarLeftBtnClick() {
         onBackPressed();
     }
 
+    @Override
     public void onResume() {
         super.onResume();
         webView.onResume();

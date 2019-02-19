@@ -620,7 +620,7 @@ public class JSInterfaceMgr {
             }
 
             if (files != null && files.size() > 0) {
-                ZHttp.uploadFileWithHeadr(url, headers, params, files, new ZStringResponse() {
+                ZHttp.uploadFileWithHeader(url, headers, params, files, new ZStringResponse() {
                     @Override
                     public void onSuccess(Response response, String resObj) {
                         JsonObject jsonReply = new JsonObject();
